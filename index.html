@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffe7c9" />
+  <title>晴雨 · 天气</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='30' fill='%23ffb03a'/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body data-theme="sunny">
+  <!-- 顶部加载进度条：请求数据时出现 -->
+  <div class="loading-bar" aria-hidden="true"></div>
+
+  <!-- ===================== 背景层 =====================
+       4 个模糊光斑 + 一层噪点，靠 CSS 的 breathing 动画缓慢伸缩，
+       切换 body 的 data-theme 就能整体换色调（晴天暖黄 / 雨天蓝调）
+  ===================================================== -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
+    <div class="bg-blob blob-4"></div>
+    <div class="bg-grain"></div>
+  </div>
+
+  <main class="app">
+
+    <!-- ===================== 顶部栏 ===================== -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <h1>晴雨</h1>
+        <span class="brand-sub">QWEATHER</span>
+      </div>
+
+      <!-- 城市搜索：输入即联想，数据来自 GeoAPI -->
+      <div class="search-wrap">
+        <div class="search glass" id="searchBox">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4.5 4.5" />
+          </svg>
+          <input id="cityInput" type="text" placeholder="搜索城市，例如 杭州 / 上海 / Tokyo" autocomplete="off"
+            spellcheck="false" aria-label="搜索城市" />
+          <button class="search-btn" id="searchBtn" type="button">查询</button>
+        </div>
+        <ul class="suggest" id="suggestList" hidden></ul>
+      </div>
+    </header>
+
+    <!-- ===================== 当前天气 ===================== -->
+    <section class="hero glass">
+      <div class="hero-main">
+        <div class="hero-loc">
+          <h2 id="cityName">正在加载…</h2>
+          <p id="cityMeta">正在获取天气数据</p>
+        </div>
+
+        <div class="hero-temp">
+          <div class="temp-block">
+            <p class="temp-line">
+              <span class="temp" id="temp">--</span>
+              <span class="temp-unit">°C</span>
+            </p>
+            <p class="temp-text" id="tempText">—</p>
+            <p class="temp-sub">
+              <span id="feelsLike">体感 --°</span>
+              <span aria-hidden="true">·</span>
+              <span id="todayRange">--° / --°</span>
+            </p>
+          </div>
+          <!-- 这里的天气图标由 JS 用内联 SVG 生成 -->
+          <div class="hero-icon" id="heroIcon" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <!-- 右侧 4 个指标 -->
+      <div class="metrics">
+        <div class="metric">
+          <span class="metric-label">湿度</span>
+          <span class="metric-value" id="humidity">--</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">风向风力</span>
+          <span class="metric-value" id="wind">--</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">气压</span>
+          <span class="metric-value" id="pressure">--</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">能见度</span>
+          <span class="metric-value" id="visibility">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 日出日落 + 降雨提醒 ===================== -->
+    <div class="grid">
+
+      <!-- 日出日落：一条二次贝塞尔弧线，太阳点的位置按时间实时计算 -->
+      <article class="card glass">
+        <div class="card-head">
+          <h3>日出 · 日落</h3>
+          <span class="card-tag" id="dayLength">--</span>
+        </div>
+
+        <svg class="sun-arc" viewBox="0 0 300 132" aria-hidden="true">
+          <path class="arc-base" d="M20 108Q150 -14 280 108" />
+          <!-- pathLength="1" 让虚线段长度等于 1，方便用 stroke-dashoffset 控制进度 -->
+          <path class="arc-progress" id="arcProgress" d="M20 108Q150 -14 280 108" pathLength="1" />
+          <line class="horizon" x1="6" y1="108" x2="294" y2="108" />
+          <g id="sunGroup">
+            <circle class="sun-halo" cx="20" cy="108" r="14" />
+            <circle class="sun-dot" cx="20" cy="108" r="5.5" />
+          </g>
+        </svg>
+
+        <div class="sun-times">
+          <div>
+            <span class="sun-side">日出</span>
+            <strong id="sunrise">--:--</strong>
+          </div>
+          <div class="sun-now">
+            <span class="sun-side">现在</span>
+            <strong id="sunNow">--:--</strong>
+          </div>
+          <div>
+            <span class="sun-side">日落</span>
+            <strong id="sunset">--:--</strong>
+          </div>
+        </div>
+      </article>
+
+      <!-- 降雨提醒：预警 > 分钟级降水 > 7 天预报，逐级降级 -->
+      <article class="card glass rain-card is-calm" id="rainCard">
+        <div class="rain-head">
+          <div class="rain-droplet" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M16 3.2c4.3 5.7 8.6 10.8 8.6 15.4A8.6 8.6 0 0 1 7.4 18.6C7.4 14 11.7 8.9 16 3.2Z"
+                fill="currentColor" />
+            </svg>
+          </div>
+          <div>
+            <h3>降雨提醒</h3>
+            <p class="rain-sub" id="rainSub">正在分析天空…</p>
+          </div>
+        </div>
+
+        <p class="rain-main" id="rainText">—</p>
+        <div class="rain-tags" id="rainTags"></div>
+      </article>
+    </div>
+
+    <!-- ===================== 7 天预报 ===================== -->
+    <section class="forecast glass">
+      <div class="card-head">
+        <h3>未来 7 天</h3>
+        <span class="card-tag">温度区间条</span>
+      </div>
+      <ul class="fc-list" id="forecastList"></ul>
+    </section>
+
+    <footer class="foot">
+      数据来源 和风天气 QWeather · 仅用于学习演示
+    </footer>
+  </main>
+
+  <!-- 提示条 -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
